@@ -25,4 +25,18 @@ plain PHP, a `MockHttpClient` in a test.
 | Picture of the act | yes, when the archive scanned it (`CivilRecord::$images`, given by `find()`) |
 | Access | free, no key, open data; 4 calls a second per address (kept by the class) |
 
+## Responsibility
+
+This package is an independent, unofficial client: it is not affiliated with, endorsed by or
+sponsored by Open Archives (openarchieven.nl) or the archives it publishes. It reaches their service
+on behalf of whoever runs it, and it does not redistribute their data beyond the short excerpts
+recorded as test fixtures. Its MIT licence covers this package's code only and grants no right to
+the service or to its data.
+
+Whoever installs and runs this package is responsible for complying with the Open Archives API's
+terms ([Open Archives API](https://www.openarchieven.nl/api/docs/)), for obtaining whatever they
+require (an account, a key, a licence or subscription, an attribution or a citation, a rate limit to
+respect), and for any use made of what it returns. The authors publish it free of charge, make no
+commercial use of it, and accept no liability for how it is used (see [LICENSE](LICENSE)).
+
 Documentation: [docs/](docs/index.md). License: MIT since 2026-10-09; earlier versions remain published under LGPL-3.0-or-later.

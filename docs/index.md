@@ -3,7 +3,7 @@
 ## Installation
 
 ```sh
-composer require glitchr/omnistate omnistate/openarchieven
+composer require omniscient/omnistate omnistate/openarchieven
 ```
 
 In a Symfony application, `OmnistateBundle` registers it when it is installed; nothing to configure.

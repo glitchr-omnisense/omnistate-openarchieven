@@ -158,7 +158,12 @@ final class OpenArchieven implements CivilRegistryInterface
             $response = $this->http->request('GET', rtrim($this->url, '/').$path, ['query' => $query, 'headers' => ['Accept' => 'application/json'], 'timeout' => $this->timeout]);
             $status = $response->getStatusCode();
             if (429 === $status || $status >= 500) {
-                throw new UnavailableException(sprintf('Open Archives answered %d.', $status), 429 === $status ? 1 : null);
+                $retry = $response->getHeaders(false)['retry-after'][0] ?? null;
+
+                throw new UnavailableException(sprintf('Open Archives answered %d.', $status), 429 === $status ? (is_numeric($retry) ? max(1, (int) $retry) : 1) : null);
+            }
+            if (401 === $status || 403 === $status) {
+                throw new UnavailableException(sprintf('Open Archives refused the call (%d).', $status));
             }
             if ($find && \in_array($status, [404, 410], true)) {
                 return null;

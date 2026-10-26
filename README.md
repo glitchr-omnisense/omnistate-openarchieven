@@ -2,7 +2,7 @@
 
 Births, baptisms, marriages, deaths, burials and more from the indexes of some two hundred Dutch and
 Belgian archives, through [Open Archives](https://www.openarchieven.nl), for
-[omniscient/omnistate](https://github.com/glitchr-studio/omnistate).
+[omnisense/omnistate](https://github.com/glitchr-omnisense/omnistate).
 
 ```php
 $registry = new OpenArchieven($httpClient);
@@ -13,7 +13,7 @@ $act->archive;            // Brabants Historisch Informatie Centrum, Geboortereg
 $act->images;             // the scan of the act
 ```
 
-No framework needed: the package requires `omniscient/omnistate` and `symfony/http-client`.
+No framework needed: the package requires `omnisense/omnistate` and `symfony/http-client`.
 `$httpClient` is the HTTP client to call with - the application's, `HttpClient::create()` in
 plain PHP, a `MockHttpClient` in a test.
 

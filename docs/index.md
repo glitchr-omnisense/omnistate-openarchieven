@@ -1,7 +1,7 @@
 # omnistate/openarchieven
 
 Births, baptisms, marriages, deaths, burials and more for
-[omniscient/omnistate](https://github.com/glitchr-studio/omnistate), from
+[omnisense/omnistate](https://github.com/glitchr-omnisense/omnistate), from
 [Open Archives](https://www.openarchieven.nl) (openarchieven.nl): the indexes of some two hundred
 Dutch and Belgian archives in one search - civil registration, church books, population
 registers, notarial deeds - plus what they index of Suriname and of France (INSEE's deaths). A
@@ -18,10 +18,10 @@ The base address is the constant `OpenArchieven::URL` (or the `url` argument).
 ## Installation
 
 ```sh
-composer require omniscient/omnistate omnistate/openarchieven
+composer require omnisense/omnistate omnistate/openarchieven
 ```
 
-Requires PHP 8.2, `omniscient/omnistate` (1.x) and `symfony/http-client` (6.4, 7 or 8). In a
+Requires PHP 8.2, `omnisense/omnistate` (1.x) and `symfony/http-client` (6.4, 7 or 8). In a
 Symfony application, `OmnistateBundle` registers it when it is installed (tag
 `omnistate.civil_registry`); nothing to configure. The bundle builds it with the default label
 language, `en`.

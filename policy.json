@@ -1,0 +1,45 @@
+{
+    "$schema": "https://github.com/glitchr-omnisense/contracts/blob/1.x/resources/usage-policy.schema.json",
+    "provider": "openarchieven",
+    "rateLimits": [
+        {
+            "max": 4,
+            "window": "second",
+            "scope": "application",
+            "operations": [],
+            "note": "Four calls a second per calling address (Open Archives' API documentation, as docs/index.md reads it); the class also paces itself."
+        }
+    ],
+    "rights": {
+        "commercial": "unknown",
+        "openSourceRequired": null,
+        "caching": {
+            "permission": "unknown",
+            "maxTtl": null
+        },
+        "storage": "unknown",
+        "redistribution": "unknown",
+        "attribution": {
+            "required": false,
+            "text": null,
+            "url": null,
+            "where": []
+        },
+        "licence": null
+    },
+    "requirements": {
+        "key": false,
+        "userAgent": {
+            "required": false,
+            "pattern": null
+        }
+    },
+    "provenance": {
+        "terms": "https://www.openarchieven.nl/api/docs/",
+        "policy": null,
+        "verifiedAt": null,
+        "declaredBy": "maintainer",
+        "contact": null,
+        "notes": "Figures from this package's docs/index.md (its live run of 2026-10-25); the terms were not re-read when the policy was first written (2026-11-10): rights the terms were not read for are unknown."
+    }
+}

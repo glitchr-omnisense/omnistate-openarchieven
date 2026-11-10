@@ -2,6 +2,8 @@
 
 namespace Omnistate\OpenArchieven;
 
+use Omnisense\Contracts\Policy\DeclaresUsagePolicyInterface;
+use Omnisense\Contracts\Policy\UsagePolicy;
 use Omnistate\Exception\OmnistateException;
 use Omnistate\Exception\UnavailableException;
 use Omnistate\Model\Archive;
@@ -31,7 +33,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * is the country of the archive that holds the record, and knows four
  * values: nl, be, fr, sr.
  */
-final class OpenArchieven implements CivilRegistryInterface
+final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicyInterface
 {
     public const URL = 'https://api.openarchieven.nl/1.1';
 
@@ -56,6 +58,12 @@ final class OpenArchieven implements CivilRegistryInterface
         private readonly string $lang = 'en',
         private readonly string $url = self::URL,
     ) {
+    }
+
+    /** Its usage policy: policy.json, beside this class. */
+    public function usagePolicy(): UsagePolicy
+    {
+        return UsagePolicy::fromFile(__DIR__.'/policy.json');
     }
 
     public function name(): string
@@ -160,7 +168,7 @@ final class OpenArchieven implements CivilRegistryInterface
             if (429 === $status || $status >= 500) {
                 $retry = $response->getHeaders(false)['retry-after'][0] ?? null;
 
-                throw new UnavailableException(sprintf('Open Archives answered %d.', $status), 429 === $status ? (is_numeric($retry) ? max(1, (int) $retry) : 1) : null);
+                throw new UnavailableException(sprintf('Open Archives answered %d.', $status), 429 === $status ? (is_numeric($retry) ? max(1, (int) $retry) : 1) : null, null, $status);
             }
             if (401 === $status || 403 === $status) {
                 throw new UnavailableException(sprintf('Open Archives refused the call (%d).', $status));

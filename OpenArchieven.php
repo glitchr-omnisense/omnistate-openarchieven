@@ -124,7 +124,7 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
             'lang' => $this->lang,
         ], static fn (mixed $value) => null !== $value && '' !== $value));
 
-        $docs = $answer['response']['docs'] ?? [];
+        $docs = self::at($answer, 'response', 'docs') ?? [];
         if (!\is_array($docs)) {
             throw self::malformed();
         }
@@ -157,7 +157,11 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
         return $from === $to ? (string) $from : $from.'-'.$to;
     }
 
-    /** @return array<string, mixed>|null null: gone (find only) */
+    /**
+     * @param array<string, mixed> $query
+     *
+     * @return array<mixed>|null null: gone (find only)
+     */
     private function ask(string $path, array $query, bool $find = false): ?array
     {
         $wait = self::$last + self::PACE - microtime(true);
@@ -185,11 +189,11 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
         } catch (ExceptionInterface|\JsonException $e) {
             throw new UnavailableException('Open Archives did not answer: '.$e->getMessage(), null, $e);
         }
-        if (isset($answer['error_code'])) {
+        if (null !== self::at($answer, 'error_code')) {
             if ($find) {
                 return null;   // an archive or a record it does not have
             }
-            throw new OmnistateException(sprintf('Open Archives refused the question (%s): %s', $answer['error_code'], $answer['error_description'] ?? ''));
+            throw new OmnistateException(sprintf('Open Archives refused the question (%s): %s', self::cast(self::at($answer, 'error_code')), self::cast(self::at($answer, 'error_description'))));
         }
 
         return null === $answer || \is_array($answer) ? $answer : throw self::malformed();
@@ -203,22 +207,23 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
     /**
      * A line of a search: one person of one act.
      *
-     * @param array<string, mixed> $doc
+     * @param array<mixed> $doc
      */
     private function line(array $doc): CivilRecord
     {
         $place = $doc['eventplace'] ?? null;
         $place = \is_array($place) ? ($place[0] ?? null) : $place;
         $date = $doc['eventdate'] ?? [];
+        $code = self::cast($doc['archive_code'] ?? null);
 
         return new CivilRecord(
-            identifier: $doc['archive_code'].':'.$doc['identifier'],
+            identifier: $code.':'.self::cast($doc['identifier'] ?? null),
             kind: self::kind(self::string($doc['_eventtype'] ?? $doc['eventtype'] ?? null)),
             source: $this->name(),
-            date: PartialDate::of((int) ($date['year'] ?? 0), (int) ($date['month'] ?? 0), (int) ($date['day'] ?? 0)),
+            date: PartialDate::of(self::integer(self::at($date, 'year')), self::integer(self::at($date, 'month')), self::integer(self::at($date, 'day'))),
             place: \is_string($place) && '' !== $place ? new Place($place) : null,
             persons: [new CivilPerson(role: self::string($doc['relationtype'] ?? null), fullName: self::string($doc['personname'] ?? null))],
-            archive: new Archive((string) ($doc['archive_org'] ?? $doc['archive'] ?? $doc['archive_code']), (string) $doc['archive_code']),
+            archive: new Archive(self::cast($doc['archive_org'] ?? $doc['archive'] ?? $code), $code),
             url: self::string($doc['url'] ?? null),
             title: self::string($doc['sourcetype'] ?? null),
             raw: $doc,
@@ -228,7 +233,7 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
     /**
      * The whole act (the A2A model): everyone named, the reference, the scans.
      *
-     * @param array<string, mixed> $a2a
+     * @param array<mixed> $a2a
      */
     private function act(string $identifier, array $a2a): CivilRecord
     {
@@ -238,64 +243,69 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
 
         $roles = [];
         foreach ($list($a2a['RelationEP'] ?? null) as $relation) {
-            $roles[self::key($relation['PersonKeyRef'] ?? null)] = $relation['RelationType'] ?? null;
+            $roles[self::key(self::at($relation, 'PersonKeyRef'))] = self::at($relation, 'RelationType');
         }
-        $kind = self::kind(self::string($event['EventType'] ?? null));
+        $kind = self::kind(self::string(self::at($event, 'EventType')));
         $persons = [];
         foreach ($list($a2a['Person'] ?? null) as $person) {
-            $name = $person['PersonName'] ?? [];
-            $given = trim((string) ($name['PersonNameFirstName'] ?? ''));
+            $name = self::at($person, 'PersonName') ?? [];
+            $given = trim(self::cast(self::at($name, 'PersonNameFirstName')));
+            $age = self::at($person, 'Age', 'PersonAgeLiteral');
+            $born = self::at($person, 'BirthPlace', 'Place');
             $persons[] = new CivilPerson(
-                familyName: trim(($name['PersonNamePrefixLastName'] ?? '').' '.($name['PersonNameLastName'] ?? '')),
-                givenNames: '' === $given ? [] : preg_split('/\s+/', $given),
-                sex: Sex::fromAny($person['Gender'] ?? null),
-                role: self::string($roles[self::key($person['@pid'] ?? null)] ?? null),
-                birthDate: self::date(self::object($person['BirthDate'] ?? null)),
-                birthPlace: isset($person['BirthPlace']['Place']) ? new Place(self::string($person['BirthPlace']['Place'])) : null,
-                age: isset($person['Age']['PersonAgeLiteral']) && is_numeric($person['Age']['PersonAgeLiteral']) ? (int) $person['Age']['PersonAgeLiteral'] : null,
-                profession: self::string($person['Profession'] ?? null),
-                fullName: self::string($name['PersonNameLiteral'] ?? null),
+                familyName: trim(self::cast(self::at($name, 'PersonNamePrefixLastName')).' '.self::cast(self::at($name, 'PersonNameLastName'))),
+                givenNames: '' === $given ? [] : (preg_split('/\s+/', $given) ?: []),
+                sex: Sex::fromAny(self::at($person, 'Gender')),
+                role: self::string($roles[self::key(self::at($person, '@pid'))] ?? null),
+                birthDate: self::date(self::object(self::at($person, 'BirthDate'))),
+                birthPlace: null !== $born ? new Place(self::string($born)) : null,
+                age: is_numeric($age) ? (int) $age : null,
+                profession: self::string(self::at($person, 'Profession')),
+                fullName: self::string(self::at($name, 'PersonNameLiteral')),
             );
         }
         // the one the act is about first: the child, the spouses, the deceased
         $main = ['Kind', 'Dopeling', 'Bruidegom', 'Bruid', 'Overledene', 'Geregistreerde'];
         usort($persons, static fn (CivilPerson $a, CivilPerson $b) => (\in_array($a->role, $main, true) ? 0 : 1) <=> (\in_array($b->role, $main, true) ? 0 : 1));
 
-        $reference = $source['SourceReference'] ?? [];
+        $reference = self::at($source, 'SourceReference') ?? [];
         $images = [];
-        foreach ($list($source['SourceAvailableScans']['Scan'] ?? null) as $scan) {
-            if (isset($scan['Uri'])) {
-                $images[] = $scan['Uri'];
+        foreach ($list(self::at($source, 'SourceAvailableScans', 'Scan')) as $scan) {
+            $uri = self::at($scan, 'Uri');
+            if (null !== $uri) {
+                $images[] = self::cast($uri);
             }
         }
-        $place = $event['EventPlace']['Place'] ?? $source['SourcePlace']['Place'] ?? null;
+        $place = self::at($event, 'EventPlace', 'Place') ?? self::at($source, 'SourcePlace', 'Place');
+        $folio = self::at($reference, 'Folio');
+        $number = self::at($reference, 'DocumentNumber');
         [$archive] = explode(':', $identifier, 2);
 
         return new CivilRecord(
             identifier: $identifier,
             kind: $kind,
             source: $this->name(),
-            date: self::date(self::object($event['EventDate'] ?? null)) ?? self::date(self::object($source['SourceDate'] ?? null)),
-            place: null === $place ? null : new Place(self::string($place), countryName: self::string($source['SourcePlace']['Country'] ?? null)),
+            date: self::date(self::object(self::at($event, 'EventDate'))) ?? self::date(self::object(self::at($source, 'SourceDate'))),
+            place: null === $place ? null : new Place(self::string($place), countryName: self::string(self::at($source, 'SourcePlace', 'Country'))),
             persons: $persons,
             archive: new Archive(
-                (string) ($reference['InstitutionName'] ?? $archive),
+                self::cast(self::at($reference, 'InstitutionName') ?? $archive),
                 strtolower($archive),
-                implode(', ', array_filter([$reference['Collection'] ?? null, $reference['Book'] ?? null, isset($reference['Folio']) ? 'folio '.$reference['Folio'] : null, isset($reference['DocumentNumber']) ? 'n° '.$reference['DocumentNumber'] : null])) ?: null,
-                self::string($source['SourceDigitalOriginal'] ?? null),
+                implode(', ', array_filter([self::cast(self::at($reference, 'Collection')), self::cast(self::at($reference, 'Book')), null !== $folio ? 'folio '.self::cast($folio) : null, null !== $number ? 'n° '.self::cast($number) : null])) ?: null,
+                self::string(self::at($source, 'SourceDigitalOriginal')),
             ),
             url: 'https://www.openarchieven.nl/'.$identifier.('nl' === $this->lang ? '' : '/'.$this->lang),
             images: $images,
-            title: self::string($source['SourceType'] ?? null),
-            number: isset($reference['DocumentNumber']) ? (string) $reference['DocumentNumber'] : null,
+            title: self::string(self::at($source, 'SourceType')),
+            number: null !== $number ? self::cast($number) : null,
             raw: $a2a,
         );
     }
 
-    /** @param array<string, mixed>|null $date */
+    /** @param array<mixed>|null $date */
     private static function date(?array $date): ?PartialDate
     {
-        return null === $date ? null : PartialDate::of((int) ($date['Year'] ?? 0), (int) ($date['Month'] ?? 0), (int) ($date['Day'] ?? 0));
+        return null === $date ? null : PartialDate::of(self::integer($date['Year'] ?? 0), self::integer($date['Month'] ?? 0), self::integer($date['Day'] ?? 0));
     }
 
     /**
@@ -336,6 +346,35 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
             \is_float($value), \is_bool($value) => (int) $value,
             default => throw self::malformed(),
         };
+    }
+
+    /**
+     * $value[$key][...] ?? null, as PHP reads it: an array's item, a string's
+     * character at an integer offset, null for anything else.
+     */
+    private static function at(mixed $value, string|int ...$keys): mixed
+    {
+        foreach ($keys as $key) {
+            if (\is_array($value) || (\is_string($value) && \is_int($key))) {
+                $value = $value[$key] ?? null;
+            } else {
+                return null;
+            }
+        }
+
+        return $value;
+    }
+
+    /** (string) of a scalar, as the answer's values were cast: "" for null, and for an array where PHP gave "Array". */
+    private static function cast(mixed $value): string
+    {
+        return \is_scalar($value) ? (string) $value : '';
+    }
+
+    /** (int) of a scalar, 0 for anything else (an array: where PHP gave 1 for a non-empty one). */
+    private static function integer(mixed $value): int
+    {
+        return \is_scalar($value) ? (int) $value : 0;
     }
 
     /** The family's rule on a body that is not what it should be (docs/providers.md). */

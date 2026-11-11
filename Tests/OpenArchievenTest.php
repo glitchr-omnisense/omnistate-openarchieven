@@ -38,7 +38,7 @@ final class OpenArchievenTest extends TestCase
         $archives = new OpenArchieven(new MockHttpClient(function (string $method, string $url) use (&$asked) {
             $asked = urldecode($url);
 
-            return new MockResponse(file_get_contents(__DIR__.'/Fixtures/search.json'));
+            return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/search.json'));
         }));
         $records = $archives->search(new CivilQuery(familyName: 'van Gogh', givenName: 'Vincent Willem', dated: Period::year(1853), limit: 10));
 
@@ -50,10 +50,12 @@ final class OpenArchievenTest extends TestCase
         self::assertSame(CivilRecordKind::BIRTH, $birth->kind);
         self::assertSame('1853-03-30', (string) $birth->date);
         self::assertSame('Zundert', $birth->place?->name);
-        self::assertSame('Vincent Willem van Gogh', $birth->principal()?->name());
-        self::assertSame('Child', $birth->principal()?->role);
-        self::assertSame('Brabants Historisch Informatie Centrum', $birth->archive?->name);
-        self::assertSame('bhi', $birth->archive?->code);
+        self::assertNotNull($birth->principal());
+        self::assertSame('Vincent Willem van Gogh', $birth->principal()->name());
+        self::assertSame('Child', $birth->principal()->role);
+        self::assertNotNull($birth->archive);
+        self::assertSame('Brabants Historisch Informatie Centrum', $birth->archive->name);
+        self::assertSame('bhi', $birth->archive->code);
         self::assertSame('Civil registration births', $birth->title);
         self::assertSame('https://www.openarchieven.nl/bhi:78a37833-d731-ffe5-184c-f9f424826871/en', $birth->url);
 
@@ -66,7 +68,7 @@ final class OpenArchievenTest extends TestCase
         $archives = new OpenArchieven(new MockHttpClient(function (string $method, string $url) use (&$urls) {
             $urls[] = urldecode(substr($url, \strlen(OpenArchieven::URL)));
 
-            return new MockResponse(file_get_contents(__DIR__.'/Fixtures/'.(str_contains($url, 'Doop') ? 'baptisms' : 'search').'.json'));
+            return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.(str_contains($url, 'Doop') ? 'baptisms' : 'search').'.json'));
         }));
 
         $baptisms = $archives->search(new CivilQuery(familyName: 'Jansen', born: Period::year(1750), kinds: [CivilRecordKind::BAPTISM], limit: 3));
@@ -92,7 +94,7 @@ final class OpenArchievenTest extends TestCase
         $archives = new OpenArchieven(new MockHttpClient(function (string $method, string $url) use (&$asked) {
             $asked = urldecode($url);
 
-            return new MockResponse(file_get_contents(__DIR__.'/Fixtures/show.json'));
+            return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/show.json'));
         }));
         $act = $archives->find('bhi:78a37833-d731-ffe5-184c-f9f424826871');
 
@@ -103,9 +105,10 @@ final class OpenArchievenTest extends TestCase
         self::assertSame(['Vincent Willem van Gogh', 'Anna Cornelia Carbentus', 'Theodorus van Gogh'], array_map('strval', $act->persons), 'the child first');
         self::assertSame(['Kind', 'Moeder', 'Vader'], array_map(static fn ($p) => $p->role, $act->persons));
         self::assertSame('1853-03-30', (string) $act->principal()?->birthDate);
-        self::assertSame('Brabants Historisch Informatie Centrum', $act->archive?->name);
-        self::assertSame('Bron: boek, Deel: 9509, Periode: 1853, Geboorteregister Zundert 1853, n° 29', $act->archive?->reference);
-        self::assertSame('https://www.bhic.nl/memorix/genealogy/search/deeds/78a37833-d731-ffe5-184c-f9f424826871', $act->archive?->url);
+        self::assertNotNull($act->archive);
+        self::assertSame('Brabants Historisch Informatie Centrum', $act->archive->name);
+        self::assertSame('Bron: boek, Deel: 9509, Periode: 1853, Geboorteregister Zundert 1853, n° 29', $act->archive->reference);
+        self::assertSame('https://www.bhic.nl/memorix/genealogy/search/deeds/78a37833-d731-ffe5-184c-f9f424826871', $act->archive->url);
         self::assertSame('29', $act->number);
         self::assertSame(['https://images.memorix.nl/bhic/thumb/640x480/fab8c4f9-fa6f-cc20-c345-f5e21c1642d3.jpg'], $act->images);
         self::assertTrue($act->hasImages());
@@ -113,14 +116,14 @@ final class OpenArchievenTest extends TestCase
 
     public function testNothingFoundAndARecordThatIsGone(): void
     {
-        $none = new OpenArchieven(new MockHttpClient(new MockResponse(file_get_contents(__DIR__.'/Fixtures/none.json'))));
+        $none = new OpenArchieven(new MockHttpClient(new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/none.json'))));
         self::assertSame([], $none->search(new CivilQuery(familyName: 'zzzzqqqxxnobody')));
 
         $gone = new OpenArchieven(new MockHttpClient(new MockResponse('', ['http_code' => 410])));
         self::assertNull($gone->find('bhi:00000000-0000-0000-0000-000000000000'));
         self::assertNull($gone->find('not an identifier'), 'not asked');
 
-        $unknown = new OpenArchieven(new MockHttpClient(new MockResponse(file_get_contents(__DIR__.'/Fixtures/error.json'))));
+        $unknown = new OpenArchieven(new MockHttpClient(new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/error.json'))));
         self::assertNull($unknown->find('nope:00000000-0000-0000-0000-000000000000'), 'an archive it does not have');
     }
 
@@ -128,7 +131,7 @@ final class OpenArchievenTest extends TestCase
     {
         $this->expectException(OmnistateException::class);
         $this->expectExceptionMessage('Invalid archive');
-        (new OpenArchieven(new MockHttpClient(new MockResponse(file_get_contents(__DIR__.'/Fixtures/error.json')))))->search(new CivilQuery(familyName: 'x'));
+        (new OpenArchieven(new MockHttpClient(new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/error.json')))))->search(new CivilQuery(familyName: 'x'));
     }
 
     public function testAnAnswerOfAnotherShapeIsUnavailable(): void
@@ -169,7 +172,7 @@ final class OpenArchievenTest extends TestCase
 
     public function testFourCallsASecondAtMost(): void
     {
-        $archives = new OpenArchieven(new MockHttpClient(fn () => new MockResponse(file_get_contents(__DIR__.'/Fixtures/none.json'))));
+        $archives = new OpenArchieven(new MockHttpClient(fn () => new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/none.json'))));
         $start = microtime(true);
         for ($i = 0; $i < 4; ++$i) {
             $archives->search(new CivilQuery(familyName: 'Coret'));

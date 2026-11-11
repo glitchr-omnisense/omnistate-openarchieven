@@ -27,12 +27,12 @@ final class OpenArchievenContractTest extends TestCase
         }), ['response_headers' => ['content-type' => 'application/json']])];
     }
 
-    protected function civilQuery(): ?CivilQuery
+    protected function civilQuery(): CivilQuery
     {
         return new CivilQuery(familyName: 'van Gogh', givenName: 'Vincent Willem');
     }
 
-    protected function civilIdentifier(): ?string
+    protected function civilIdentifier(): string
     {
         return 'bhi:78a37833-d731-ffe5-184c-f9f424826871';
     }

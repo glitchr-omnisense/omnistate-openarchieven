@@ -124,7 +124,11 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
             'lang' => $this->lang,
         ], static fn (mixed $value) => null !== $value && '' !== $value));
 
-        $records = array_map($this->line(...), $answer['response']['docs'] ?? []);
+        $docs = $answer['response']['docs'] ?? [];
+        if (!\is_array($docs)) {
+            throw self::malformed();
+        }
+        $records = array_map(fn (mixed $doc) => $this->line(\is_array($doc) ? $doc : throw self::malformed()), $docs);
 
         return \array_slice(array_values(array_filter($records, static fn (CivilRecord $record) => $query->wants($record->kind))), 0, $query->limit);
     }
@@ -188,7 +192,7 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
             throw new OmnistateException(sprintf('Open Archives refused the question (%s): %s', $answer['error_code'], $answer['error_description'] ?? ''));
         }
 
-        return $answer;
+        return null === $answer || \is_array($answer) ? $answer : throw self::malformed();
     }
 
     private static function kind(?string $event): CivilRecordKind
@@ -209,14 +213,14 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
 
         return new CivilRecord(
             identifier: $doc['archive_code'].':'.$doc['identifier'],
-            kind: self::kind($doc['_eventtype'] ?? $doc['eventtype'] ?? null),
+            kind: self::kind(self::string($doc['_eventtype'] ?? $doc['eventtype'] ?? null)),
             source: $this->name(),
             date: PartialDate::of((int) ($date['year'] ?? 0), (int) ($date['month'] ?? 0), (int) ($date['day'] ?? 0)),
             place: \is_string($place) && '' !== $place ? new Place($place) : null,
-            persons: [new CivilPerson(role: $doc['relationtype'] ?? null, fullName: $doc['personname'] ?? null)],
+            persons: [new CivilPerson(role: self::string($doc['relationtype'] ?? null), fullName: self::string($doc['personname'] ?? null))],
             archive: new Archive((string) ($doc['archive_org'] ?? $doc['archive'] ?? $doc['archive_code']), (string) $doc['archive_code']),
-            url: $doc['url'] ?? null,
-            title: $doc['sourcetype'] ?? null,
+            url: self::string($doc['url'] ?? null),
+            title: self::string($doc['sourcetype'] ?? null),
             raw: $doc,
         );
     }
@@ -234,9 +238,9 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
 
         $roles = [];
         foreach ($list($a2a['RelationEP'] ?? null) as $relation) {
-            $roles[$relation['PersonKeyRef'] ?? ''] = $relation['RelationType'] ?? null;
+            $roles[self::key($relation['PersonKeyRef'] ?? null)] = $relation['RelationType'] ?? null;
         }
-        $kind = self::kind($event['EventType'] ?? null);
+        $kind = self::kind(self::string($event['EventType'] ?? null));
         $persons = [];
         foreach ($list($a2a['Person'] ?? null) as $person) {
             $name = $person['PersonName'] ?? [];
@@ -245,12 +249,12 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
                 familyName: trim(($name['PersonNamePrefixLastName'] ?? '').' '.($name['PersonNameLastName'] ?? '')),
                 givenNames: '' === $given ? [] : preg_split('/\s+/', $given),
                 sex: Sex::fromAny($person['Gender'] ?? null),
-                role: $roles[$person['@pid'] ?? ''] ?? null,
-                birthDate: self::date($person['BirthDate'] ?? null),
-                birthPlace: isset($person['BirthPlace']['Place']) ? new Place($person['BirthPlace']['Place']) : null,
+                role: self::string($roles[self::key($person['@pid'] ?? null)] ?? null),
+                birthDate: self::date(self::object($person['BirthDate'] ?? null)),
+                birthPlace: isset($person['BirthPlace']['Place']) ? new Place(self::string($person['BirthPlace']['Place'])) : null,
                 age: isset($person['Age']['PersonAgeLiteral']) && is_numeric($person['Age']['PersonAgeLiteral']) ? (int) $person['Age']['PersonAgeLiteral'] : null,
-                profession: $person['Profession'] ?? null,
-                fullName: $name['PersonNameLiteral'] ?? null,
+                profession: self::string($person['Profession'] ?? null),
+                fullName: self::string($name['PersonNameLiteral'] ?? null),
             );
         }
         // the one the act is about first: the child, the spouses, the deceased
@@ -271,18 +275,18 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
             identifier: $identifier,
             kind: $kind,
             source: $this->name(),
-            date: self::date($event['EventDate'] ?? null) ?? self::date($source['SourceDate'] ?? null),
-            place: null === $place ? null : new Place($place, countryName: $source['SourcePlace']['Country'] ?? null),
+            date: self::date(self::object($event['EventDate'] ?? null)) ?? self::date(self::object($source['SourceDate'] ?? null)),
+            place: null === $place ? null : new Place(self::string($place), countryName: self::string($source['SourcePlace']['Country'] ?? null)),
             persons: $persons,
             archive: new Archive(
                 (string) ($reference['InstitutionName'] ?? $archive),
                 strtolower($archive),
                 implode(', ', array_filter([$reference['Collection'] ?? null, $reference['Book'] ?? null, isset($reference['Folio']) ? 'folio '.$reference['Folio'] : null, isset($reference['DocumentNumber']) ? 'n° '.$reference['DocumentNumber'] : null])) ?: null,
-                $source['SourceDigitalOriginal'] ?? null,
+                self::string($source['SourceDigitalOriginal'] ?? null),
             ),
             url: 'https://www.openarchieven.nl/'.$identifier.('nl' === $this->lang ? '' : '/'.$this->lang),
             images: $images,
-            title: $source['SourceType'] ?? null,
+            title: self::string($source['SourceType'] ?? null),
             number: isset($reference['DocumentNumber']) ? (string) $reference['DocumentNumber'] : null,
             raw: $a2a,
         );
@@ -292,5 +296,51 @@ final class OpenArchieven implements CivilRegistryInterface, DeclaresUsagePolicy
     private static function date(?array $date): ?PartialDate
     {
         return null === $date ? null : PartialDate::of((int) ($date['Year'] ?? 0), (int) ($date['Month'] ?? 0), (int) ($date['Day'] ?? 0));
+    }
+
+    /**
+     * A value handed to a ?string parameter, as PHP coerced it: a scalar as
+     * its string, null kept; an array where a text belongs is an answer of
+     * another shape.
+     */
+    private static function string(mixed $value): ?string
+    {
+        return match (true) {
+            null === $value, \is_string($value) => $value,
+            \is_int($value), \is_float($value) => (string) $value,
+            \is_bool($value) => $value ? '1' : '',
+            default => throw self::malformed(),
+        };
+    }
+
+    /**
+     * A date, as PHP handed it to an ?array parameter: null when absent;
+     * anything else where an object belongs is an answer of another shape.
+     *
+     * @return array<mixed>|null
+     */
+    private static function object(mixed $value): ?array
+    {
+        return null === $value || \is_array($value) ? $value : throw self::malformed();
+    }
+
+    /**
+     * A person's key as PHP used it as an array key ("" when absent, a float
+     * or a bool as an integer); a list there is an answer of another shape.
+     */
+    private static function key(mixed $value): int|string
+    {
+        return match (true) {
+            null === $value => '',
+            \is_int($value), \is_string($value) => $value,
+            \is_float($value), \is_bool($value) => (int) $value,
+            default => throw self::malformed(),
+        };
+    }
+
+    /** The family's rule on a body that is not what it should be (docs/providers.md). */
+    private static function malformed(): UnavailableException
+    {
+        return new UnavailableException('Open Archives answered in another shape than its API\'s.');
     }
 }

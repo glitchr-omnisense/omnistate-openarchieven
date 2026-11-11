@@ -131,6 +131,29 @@ final class OpenArchievenTest extends TestCase
         (new OpenArchieven(new MockHttpClient(new MockResponse(file_get_contents(__DIR__.'/Fixtures/error.json')))))->search(new CivilQuery(familyName: 'x'));
     }
 
+    public function testAnAnswerOfAnotherShapeIsUnavailable(): void
+    {
+        foreach ([
+            ['search', '"none"'],
+            ['search', '{"response":{"docs":"none"}}'],
+            ['search', '{"response":{"docs":["none"]}}'],
+            ['search', '{"response":{"docs":[{"archive_code":"frl","identifier":"x","personname":["Coret"]}]}}'],
+            ['find', '"none"'],
+            ['find', '{"Source":{"SourceType":["BS Geboorte"]}}'],
+            ['find', '{"Source":{},"RelationEP":{"PersonKeyRef":["Person1"],"RelationType":"Kind"}}'],
+            ['find', '{"Source":{},"Event":{"EventDate":"1853"}}'],
+            ['find', '{"Source":{},"Person":{"@pid":"Person1","BirthPlace":{"Place":["Leeuwarden"]}}}'],
+        ] as [$call, $body]) {
+            $archives = new OpenArchieven(new MockHttpClient(new MockResponse($body)));
+            try {
+                'search' === $call ? $archives->search(new CivilQuery(familyName: 'Coret')) : $archives->find('frl:00000000-0000-0000-0000-000000000000');
+                self::fail($call.' unavailable: '.$body);
+            } catch (UnavailableException $e) {
+                self::assertSame('Open Archives answered in another shape than its API\'s.', $e->getMessage());
+            }
+        }
+    }
+
     public function testTooManyCallsIsNotNobody(): void
     {
         try {

@@ -25,6 +25,14 @@ plain PHP, a `MockHttpClient` in a test.
 | Picture of the act | yes, when the archive scanned it (`CivilRecord::$images`, given by `find()`) |
 | Access | free, no key, open data; 4 calls a second per address (kept by the class) |
 
+## Install
+
+```sh
+composer require omnistate/openarchieven
+```
+
+It brings the family's core, `omnisense/omnistate`, and `omnisense/contracts` with it. No account and no key: open data, four calls a second per address ([`policy.json`](policy.json)).
+
 ## Responsibility
 
 This package is an independent, unofficial client: it is not affiliated with, endorsed by or
